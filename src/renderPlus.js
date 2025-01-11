@@ -159,8 +159,7 @@ viewer.changeCanvas = function (model) {
     // });
 
     this.model = model;
-    // this.model.update = this.onUpdate; // HACK: use hacked update fn for drag support
-    // console.log(this.model);
+    this.model.update = viewer.onUpdate; // HACK: use hacked update fn for drag support
     this.model.animator.addLayer("base", LIVE2DCUBISMFRAMEWORK.BuiltinAnimationBlenders.OVERRIDE, 1);
 
     this.pixiApp.stage.addChild(this.model);
@@ -168,6 +167,57 @@ viewer.changeCanvas = function (model) {
 
     window.onresize();
 };
+
+viewer.onUpdate = function (delta) {
+    let deltaTime = 0.016 * delta;
+
+    if (!this.animator.isPlaying) {
+        let m = this.motions.get("idle");
+        this.animator.getLayer("base").play(m);
+    }
+    this._animator.updateAndEvaluate(deltaTime);
+
+    if (this.inDrag) {
+        this.addParameterValueById("ParamAngleX", this.pointerX * 30);
+        this.addParameterValueById("ParamAngleY", -this.pointerY * 30);
+        this.addParameterValueById("ParamBodyAngleX", this.pointerX * 10);
+        this.addParameterValueById("ParamBodyAngleY", -this.pointerY * 10);
+        this.addParameterValueById("ParamEyeBallX", this.pointerX);
+        this.addParameterValueById("ParamEyeBallY", -this.pointerY);
+    }
+
+    if (this._physicsRig) {
+        this._physicsRig.updateAndEvaluate(deltaTime);
+    }
+
+    this._coreModel.update();
+
+    let sort = false;
+    for (let m = 0; m < this._meshes.length; ++m) {
+        this._meshes[m].alpha = this._coreModel.drawables.opacities[m];
+        this._meshes[m].visible = Live2DCubismCore.Utils.hasIsVisibleBit(this._coreModel.drawables.dynamicFlags[m]);
+        if (Live2DCubismCore.Utils.hasVertexPositionsDidChangeBit(this._coreModel.drawables.dynamicFlags[m])) {
+            this._meshes[m].vertices = this._coreModel.drawables.vertexPositions[m];
+            this._meshes[m].dirtyVertex = true;
+        }
+        if (Live2DCubismCore.Utils.hasRenderOrderDidChangeBit(this._coreModel.drawables.dynamicFlags[m])) {
+            sort = true;
+        }
+    }
+
+    if (sort) {
+        this.children.sort((a, b) => {
+            let aIndex = this._meshes.indexOf(a);
+            let bIndex = this._meshes.indexOf(b);
+            let aRenderOrder = this._coreModel.drawables.renderOrders[aIndex];
+            let bRenderOrder = this._coreModel.drawables.renderOrders[bIndex];
+
+            return aRenderOrder - bRenderOrder;
+        });
+    }
+
+    this._coreModel.drawables.resetDynamicFlags();
+}
 
 viewer.goto = function () {
     var folderPath = document.getElementById("loadModelDir").value;
