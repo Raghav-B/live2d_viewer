@@ -102,8 +102,20 @@ function viewer() {
 }
 
 viewer.goto = function () {
-    live2DMgr.count = parseInt(document.getElementById("editGoto").value) - 1;
+    var folderPath = document.getElementById("loadModelDir").value;
+    
+    // Load all models
+    let filelist = [];
+    walkdir(datasetRoot + "/" + folderPath, function (filepath) {
+        filelist.push(filepath);
+    });
+    var modelJsonList = loadModel(filelist);
+
+    live2DMgr.setModelJsonList(modelJsonList);
+    
+    live2DMgr.count = 0;
     viewer.changeModel(0);
+    viewer.startDraw();
 };
 
 viewer.save = function (filepath = path.join(outputRoot, "image.png")) {
@@ -366,13 +378,6 @@ viewer.init = function () {
         live2DMgr.nextIdleMotion();
     });
 
-    // Load all models
-    let filelist = [];
-    walkdir(datasetRoot, function (filepath) {
-        filelist.push(filepath);
-    });
-    live2DMgr.setModelJsonList(loadModel(filelist));
-
     // 3Dバッファの初期化
     var width = canvas.width;
     var height = canvas.height;
@@ -503,14 +508,6 @@ viewer.draw = function () {
 };
 
 viewer.changeModel = function (inc = 1) {
-    btnPrev = document.getElementById("btnPrev");
-    btnPrev.setAttribute("disabled", "disabled");
-    btnPrev.setAttribute("class", "inactive");
-
-    btnNext = document.getElementById("btnNext");
-    btnNext.setAttribute("disabled", "disabled");
-    btnNext.setAttribute("class", "inactive");
-
     isModelShown = false;
 
     live2DMgr.reloadFlg = true;
@@ -563,7 +560,7 @@ function md5file(filePath) {
 function loadModel(filelist) {
     let modelJsonList = [];
     filelist.forEach((filepath) => {
-        if (filepath.endsWith(".moc")) {
+        if (filepath.endsWith(".moc") || filepath.endsWith(".moc3")) {
             modelJson = loadModelJson(filepath);
             if (modelJson) {
                 modelJsonList.push(...modelJson);
