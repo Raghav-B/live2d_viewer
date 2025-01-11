@@ -10,14 +10,13 @@ nativeTheme.themeSource = "dark";
 const datasetRoot = "dataset"; // Root of dataset directory
 const outputRoot = "output"; // Root of output directory
 const blacklistPath = path.join(outputRoot, "blacklist.txt"); // Blacklist path
-const baseResolution = 1024;
 const ignoreGeneratedJson = true; // Ignore the generated JSON file
 const ignoreOriginalJson = true; // Ignore the original JSON file
 const batchOperationMinDelay = 1000;
 const batchOperationDelayRange = 1000;
 
-var thisRef = this;
 let modelJsonIds = {};
+
 
 var getPartIDs = function (modelImpl) {
     let partIDs = [];
@@ -28,6 +27,7 @@ var getPartIDs = function (modelImpl) {
     return partIDs;
 };
 
+
 var getParamIDs = function (modelImpl) {
     let paramIDs = [];
     paramDefSet = modelImpl._$E2()._$4S;
@@ -37,51 +37,30 @@ var getParamIDs = function (modelImpl) {
     return paramIDs;
 };
 
-// JavaScriptで発生したエラーを取得
+
+// Capture errors that occur in JavaScript
 window.onerror = function (msg, url, line, col, error) {
     var errmsg = "file:" + url + "<br>line:" + line + " " + msg;
     l2dError(errmsg);
 };
 
+
 function viewer() {
     this.platform = window.navigator.platform.toLowerCase();
-
     this.live2DMgr = new LAppLive2DManager();
-
-    this.isDrawStart = false;
-
-    this.gl = null;
-    this.canvas = null;
-
-    this.dragMgr = null; /*new L2DTargetPoint();*/ // ドラッグによるアニメーションの管理
-    this.viewMatrix = null; /*new L2DViewMatrix();*/
-    this.projMatrix = null; /*new L2DMatrix44()*/
-    this.deviceToScreen = null; /*new L2DMatrix44();*/
-
-    this.drag = false; // ドラッグ中かどうか
-    this.oldLen = 0; // 二本指タップした時の二点間の距離
-
-    this.lastMouseX = 0;
-    this.lastMouseY = 0;
-
-    this.isModelShown = false;
-
-    this.isPlay = true;
-    this.isLookRandom = false;
-    this.frameCount = 0;
-
+    
     // Shortcut keys
     document.addEventListener("keydown", function (e) {
         var keyCode = e.keyCode;
         if (keyCode == 90) {
             // z key
-            viewer.changeModel(-1);
+            curCanvas.changeModel(-1);
         } else if (keyCode == 88) {
             // x key
-            viewer.changeModel(1);
+            curCanvas.changeModel(1);
         } else if (keyCode == 32) {
             // space key
-            viewer.flagBlacklist();
+            curCanvas.flagBlacklist();
         }
     });
 
@@ -94,130 +73,78 @@ function viewer() {
         });
     }
 
-    // モデル描画用canvasの初期化
-    viewer.initL2dCanvas("glcanvas");
+    // Initialize canvases for model rendering
+    this.v2Canvas = new Live2DCanvasV2();
+    // this.v3Canvas = new Live2DCanvasV3();
+    this.curCanvas = this.v2Canvas;
 
-    this.canvasParent = document.getElementById("canvasParent");
-
-    // Setup pixi app for rendering Live2D v3
-    this.pixiApp = new PIXI.Application(
-        this.canvasParent.clientWidth, this.canvasParent.clientHeight, { 
-            transparent: true
-        }
-    );
-    // Append this.app.view to the canvas
-    this.canvasParent.appendChild(this.pixiApp.view);
-    this.pixiApp.view.style.position = "absolute";
-    this.pixiApp.view.style.width = "100%";
-    this.pixiApp.view.style.height = "100%";
-
-    // Setup pixi update loop
-    this.pixiApp.ticker.add((deltaTime) => {
-        if (!this.model) {
-            return;
-        }
-        this.model.update(deltaTime);
-        this.model.masks.update(this.pixiApp.renderer); 
-    });
-    this.pixiL2D = new L2D("dataset/碧蓝航线 Azue Lane/Azue Lane(JP)");
-    this.pixiL2D.load("aisaikesi_4", viewer.changeCanvas);
-
-    window.onresize = (event) => {
-        if (event === void 0) { event = null; }
-        let width = window.innerWidth * 0.9;
-        let height = (width / 16.0) * 9.0;
-        this.pixiApp.view.style.width = width + "px";
-        this.pixiApp.view.style.height = height + "px";
-        this.pixiApp.renderer.resize(width, height);
-
-        if (this.model) {
-            this.model.position = new PIXI.Point((width * 0.5), (height * 0.5));
-            this.model.scale = new PIXI.Point((this.model.position.x * 0.06), (this.model.position.x * 0.06));
-            this.model.masks.resize(this.pixiApp.view.width, this.pixiApp.view.height);
-        }
-    };
-
-    // モデル用マトリクスの初期化と描画の開始
-    viewer.init();
+    // Initialize UI interactions
+    viewer.init_interactions();
 }
 
-viewer.changeCanvas = function (model) {
-    this.pixiApp.stage.removeChildren();
 
-    // this.selectAnimation.empty();
-    // model.motions.forEach((value, key) => {
-    //     if (key != "effect") {
-    //         let btn = document.createElement("button");
-    //         let label = document.createTextNode(key);
-    //         btn.appendChild(label);
-    //         btn.className = "btnGenericText";
-    //         btn.addEventListener("click", () => {
-    //             this.startAnimation(key, "base");
-    //         });
-    //         this.selectAnimation.append(btn);
-    //     }
-    // });
+viewer.init_interactions = function () {
+    // Initialize UI components
+    btnPrev = document.getElementById("btnPrev");
+    btnNext = document.getElementById("btnNext");
+    btnPrev.addEventListener("click", function (e) {
+        curCanvas.changeModel(-1);
+    });
+    btnNext.addEventListener("click", function (e) {
+        curCanvas.changeModel(1);
+    });
 
-    this.model = model;
-    this.model.update = viewer.onUpdate; // HACK: use hacked update fn for drag support
-    this.model.animator.addLayer("base", LIVE2DCUBISMFRAMEWORK.BuiltinAnimationBlenders.OVERRIDE, 1);
+    btnGoto = document.getElementById("btnGoto");
+    btnGoto.addEventListener("click", function (e) {
+        viewer.goto();
+    });
 
-    this.pixiApp.stage.addChild(this.model);
-    this.pixiApp.stage.addChild(this.model.masks);
+    btnPlayPause = document.getElementById("btnPlayPause");
+    btnPlayPause.addEventListener("click", function (e) {
+        viewer.togglePlayPause();
+    });
+    btnPlayPause.textContent = curCanvas.isPlay ? "Pause" : "Play";
 
-    window.onresize();
+    btnSave = document.getElementById("btnSave");
+    btnSave.addEventListener("click", function (e) {
+        curCanvas.save();
+    });
+
+    btnSaveLayer = document.getElementById("btnSaveLayer");
+    btnSaveLayer.addEventListener("click", function (e) {
+        curCanvas.saveLayer();
+    });
+
+    btnSecret = document.getElementById("btnSecret");
+    btnSecret.addEventListener("click", function (e) {
+        viewer.secret();
+    });
+
+    btnBatch = document.getElementById("btnBatch");
+    btnBatch.addEventListener("click", function (e) {
+        viewer.batch();
+    });
+
+    btnResize = document.getElementById("btnResize");
+    btnResize.addEventListener("click", function (e) {
+        curCanvas.resize();
+    });
+
+    btnLookRandom = document.getElementById("btnLookRandom");
+    btnLookRandom.addEventListener("click", function (e) {
+        curCanvas.toggleLookRandom();
+    });
+
+    btnPrevMotion = document.getElementById("btnPrevMotion");
+    btnPrevMotion.addEventListener("click", function (e) {
+        live2DMgr.prevIdleMotion();
+    });
+    btnNextMotion = document.getElementById("btnNextMotion");
+    btnNextMotion.addEventListener("click", function (e) {
+        live2DMgr.nextIdleMotion();
+    });
 };
 
-viewer.onUpdate = function (delta) {
-    let deltaTime = 0.016 * delta;
-
-    if (!this.animator.isPlaying) {
-        let m = this.motions.get("idle");
-        this.animator.getLayer("base").play(m);
-    }
-    this._animator.updateAndEvaluate(deltaTime);
-
-    if (this.inDrag) {
-        this.addParameterValueById("ParamAngleX", this.pointerX * 30);
-        this.addParameterValueById("ParamAngleY", -this.pointerY * 30);
-        this.addParameterValueById("ParamBodyAngleX", this.pointerX * 10);
-        this.addParameterValueById("ParamBodyAngleY", -this.pointerY * 10);
-        this.addParameterValueById("ParamEyeBallX", this.pointerX);
-        this.addParameterValueById("ParamEyeBallY", -this.pointerY);
-    }
-
-    if (this._physicsRig) {
-        this._physicsRig.updateAndEvaluate(deltaTime);
-    }
-
-    this._coreModel.update();
-
-    let sort = false;
-    for (let m = 0; m < this._meshes.length; ++m) {
-        this._meshes[m].alpha = this._coreModel.drawables.opacities[m];
-        this._meshes[m].visible = Live2DCubismCore.Utils.hasIsVisibleBit(this._coreModel.drawables.dynamicFlags[m]);
-        if (Live2DCubismCore.Utils.hasVertexPositionsDidChangeBit(this._coreModel.drawables.dynamicFlags[m])) {
-            this._meshes[m].vertices = this._coreModel.drawables.vertexPositions[m];
-            this._meshes[m].dirtyVertex = true;
-        }
-        if (Live2DCubismCore.Utils.hasRenderOrderDidChangeBit(this._coreModel.drawables.dynamicFlags[m])) {
-            sort = true;
-        }
-    }
-
-    if (sort) {
-        this.children.sort((a, b) => {
-            let aIndex = this._meshes.indexOf(a);
-            let bIndex = this._meshes.indexOf(b);
-            let aRenderOrder = this._coreModel.drawables.renderOrders[aIndex];
-            let bRenderOrder = this._coreModel.drawables.renderOrders[bIndex];
-
-            return aRenderOrder - bRenderOrder;
-        });
-    }
-
-    this._coreModel.drawables.resetDynamicFlags();
-}
 
 viewer.goto = function () {
     var folderPath = document.getElementById("loadModelDir").value;
@@ -232,63 +159,16 @@ viewer.goto = function () {
     live2DMgr.setModelJsonList(modelJsonList);
     
     live2DMgr.count = 0;
-    viewer.changeModel(0);
-    viewer.startDraw();
+    curCanvas.changeModel(0);
+    curCanvas.startDraw();
 };
 
-viewer.save = function (filepath = path.join(outputRoot, "image.png")) {
-    // Save canvas to png file
-    var img = canvas.toDataURL();
-    var data = img.replace(/^data:image\/\w+;base64,/, "");
-    var buf = Buffer.from(data, "base64");
-    fs.writeFileSync(filepath, buf);
-};
-
-viewer.saveLayer = function (dir = path.join(outputRoot, "layer")) {
-    // Create dir
-    fs.mkdirSync(dir, { recursive: true });
-
-    // Keep previous playing state, and set to pause to stop calling draw()
-    var prevIsPlay = isPlay;
-    isPlay = false;
-
-    // Remember to update the model before calling getElementList()
-    var model = live2DMgr.getModel(0);
-    model.update(frameCount);
-    var elementList = model.live2DModel.getElementList();
-
-    // Save images for each element
-    MatrixStack.reset();
-    MatrixStack.loadIdentity();
-    MatrixStack.multMatrix(projMatrix.getArray());
-    MatrixStack.multMatrix(viewMatrix.getArray());
-    MatrixStack.push();
-
-    // Draw an image with all elements
-    viewer.save(path.join(dir, "all.png"));
-
-    elementList.forEach((item, index) => {
-        var element = item.element;
-        var partID = item.partID;
-        var order = ("000" + index).slice(-4);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        model.drawElement(gl, element);
-        // Separate directory for each partID
-        if (!fs.existsSync(path.join(dir, partID))) {
-            fs.mkdirSync(path.join(dir, partID));
-        }
-        viewer.save(path.join(dir, partID, order + "_" + partID + ".png"));
-    });
-
-    MatrixStack.pop();
-
-    isPlay = prevIsPlay;
-};
 
 viewer.togglePlayPause = function () {
-    isPlay = !isPlay;
-    btnPlayPause.textContent = isPlay ? "Pause" : "Play";
+    curCanvas.togglePlayPause();
+    btnPlayPause.textContent = curCanvas.isPlay ? "Pause" : "Play";
 };
+
 
 viewer.secret = function () {
     // Print model stat
@@ -308,6 +188,7 @@ viewer.secret = function () {
     console.log("[partCount]", partsCount);
     console.log("[elementCount]", elementCount);
 };
+
 
 // TODO
 viewer.batch = function () {
@@ -337,7 +218,7 @@ viewer.batch = function () {
             var dir = path.join(outputRoot, tag);
             console.log("[batch] output to", dir);
             fs.mkdirSync(dir, { recursive: true });
-            viewer.saveLayer(dir);
+            curCanvas.saveLayer(dir);
             if (!live2DMgr.nextIdleMotion()) {
                 viewer.changeModel(1);
                 count++;
@@ -358,294 +239,6 @@ viewer.batch = function () {
     op();
 };
 
-viewer.resize = function () {
-    const baseHeight = 1024;
-
-    live2DModel = live2DMgr.getModel(0).live2DModel;
-    if (live2DModel == null) return;
-
-    var modelWidth = live2DModel.getCanvasWidth();
-    var modelHeight = live2DModel.getCanvasHeight();
-    if (modelHeight > modelWidth) {
-        // Portrait
-        canvas.width = baseResolution;
-        canvas.height = (modelHeight / modelWidth) * baseResolution;
-    } else {
-        canvas.width = (modelWidth / modelHeight) * baseResolution;
-        canvas.height = baseResolution;
-    }
-
-    // canvas.width = live2DModel.getCanvasWidth() / live2DModel.getCanvasHeight() * baseHeight;
-    // canvas.height = baseHeight;
-
-    // ビュー行列
-    var ratio = canvas.height / canvas.width;
-    var left = LAppDefine.VIEW_LOGICAL_LEFT;
-    var right = LAppDefine.VIEW_LOGICAL_RIGHT;
-    var bottom = -ratio;
-    var top = ratio;
-
-    viewMatrix = new L2DViewMatrix();
-
-    // デバイスに対応する画面の範囲。 Xの左端, Xの右端, Yの下端, Yの上端
-    viewMatrix.setScreenRect(left, right, bottom, top);
-
-    // デバイスに対応する画面の範囲。 Xの左端, Xの右端, Yの下端, Yの上端
-    viewMatrix.setMaxScreenRect(
-        LAppDefine.VIEW_LOGICAL_MAX_LEFT,
-        LAppDefine.VIEW_LOGICAL_MAX_RIGHT,
-        LAppDefine.VIEW_LOGICAL_MAX_BOTTOM,
-        LAppDefine.VIEW_LOGICAL_MAX_TOP
-    );
-
-    viewMatrix.setMaxScale(LAppDefine.VIEW_MAX_SCALE);
-    viewMatrix.setMinScale(LAppDefine.VIEW_MIN_SCALE);
-
-    projMatrix = new L2DMatrix44();
-    projMatrix.multScale(1, canvas.width / canvas.height);
-
-    // マウス用スクリーン変換行列
-    deviceToScreen = new L2DMatrix44();
-    deviceToScreen.multTranslate(-canvas.width / 2.0, -canvas.height / 2.0);
-    deviceToScreen.multScale(2 / canvas.width, -2 / canvas.width);
-
-    gl.viewport(0, 0, canvas.width, canvas.height);
-};
-
-viewer.initL2dCanvas = function (canvasId) {
-    // canvasオブジェクトを取得
-    canvas = document.getElementById(canvasId);
-
-    // イベントの登録
-    if (canvas.addEventListener) {
-        canvas.addEventListener("mousewheel", mouseEvent, false);
-        canvas.addEventListener("click", mouseEvent, false);
-
-        canvas.addEventListener("mousedown", mouseEvent, false);
-        canvas.addEventListener("mousemove", mouseEvent, false);
-
-        canvas.addEventListener("mouseup", mouseEvent, false);
-        canvas.addEventListener("mouseout", mouseEvent, false);
-        canvas.addEventListener("contextmenu", mouseEvent, false);
-
-        // タッチイベントに対応
-        canvas.addEventListener("touchstart", touchEvent, false);
-        canvas.addEventListener("touchend", touchEvent, false);
-        canvas.addEventListener("touchmove", touchEvent, false);
-    }
-};
-
-viewer.init = function () {
-    // Initialize UI components
-    btnPrev = document.getElementById("btnPrev");
-    btnNext = document.getElementById("btnNext");
-    btnPrev.addEventListener("click", function (e) {
-        viewer.changeModel(-1);
-    });
-    btnNext.addEventListener("click", function (e) {
-        viewer.changeModel(1);
-    });
-
-    btnGoto = document.getElementById("btnGoto");
-    btnGoto.addEventListener("click", function (e) {
-        viewer.goto();
-    });
-
-    btnPlayPause = document.getElementById("btnPlayPause");
-    btnPlayPause.addEventListener("click", function (e) {
-        viewer.togglePlayPause();
-    });
-    btnPlayPause.textContent = isPlay ? "Pause" : "Play";
-
-    btnSave = document.getElementById("btnSave");
-    btnSave.addEventListener("click", function (e) {
-        viewer.save();
-    });
-
-    btnSaveLayer = document.getElementById("btnSaveLayer");
-    btnSaveLayer.addEventListener("click", function (e) {
-        viewer.saveLayer();
-    });
-
-    btnSecret = document.getElementById("btnSecret");
-    btnSecret.addEventListener("click", function (e) {
-        viewer.secret();
-    });
-
-    btnBatch = document.getElementById("btnBatch");
-    btnBatch.addEventListener("click", function (e) {
-        viewer.batch();
-    });
-
-    btnResize = document.getElementById("btnResize");
-    btnResize.addEventListener("click", function (e) {
-        viewer.resize();
-    });
-
-    btnLookRandom = document.getElementById("btnLookRandom");
-    btnLookRandom.addEventListener("click", function (e) {
-        isLookRandom = !isLookRandom;
-    });
-
-    btnPrevMotion = document.getElementById("btnPrevMotion");
-    btnPrevMotion.addEventListener("click", function (e) {
-        live2DMgr.prevIdleMotion();
-    });
-    btnNextMotion = document.getElementById("btnNextMotion");
-    btnNextMotion.addEventListener("click", function (e) {
-        live2DMgr.nextIdleMotion();
-    });
-
-    // Initialize 3D buffer
-    var width = canvas.width;
-    var height = canvas.height;
-
-    dragMgr = new L2DTargetPoint();
-
-    // ビュー行列
-    var ratio = height / width;
-    var left = LAppDefine.VIEW_LOGICAL_LEFT;
-    var right = LAppDefine.VIEW_LOGICAL_RIGHT;
-    var bottom = -ratio;
-    var top = ratio;
-
-    viewMatrix = new L2DViewMatrix();
-
-    // デバイスに対応する画面の範囲。 Xの左端, Xの右端, Yの下端, Yの上端
-    viewMatrix.setScreenRect(left, right, bottom, top);
-
-    // デバイスに対応する画面の範囲。 Xの左端, Xの右端, Yの下端, Yの上端
-    viewMatrix.setMaxScreenRect(
-        LAppDefine.VIEW_LOGICAL_MAX_LEFT,
-        LAppDefine.VIEW_LOGICAL_MAX_RIGHT,
-        LAppDefine.VIEW_LOGICAL_MAX_BOTTOM,
-        LAppDefine.VIEW_LOGICAL_MAX_TOP
-    );
-
-    viewMatrix.setMaxScale(LAppDefine.VIEW_MAX_SCALE);
-    viewMatrix.setMinScale(LAppDefine.VIEW_MIN_SCALE);
-
-    projMatrix = new L2DMatrix44();
-    projMatrix.multScale(1, width / height);
-
-    // マウス用スクリーン変換行列
-    deviceToScreen = new L2DMatrix44();
-    deviceToScreen.multTranslate(-width / 2.0, -height / 2.0);
-    deviceToScreen.multScale(2 / width, -2 / width);
-
-    // WebGLのコンテキストを取得する
-    gl = getWebGLContext();
-    if (!gl) {
-        l2dError("Failed to create WebGL context.");
-        return;
-    }
-    // OpenGLのコンテキストをセット
-    Live2D.setGL(gl);
-
-    // 描画エリアを白でクリア
-    gl.clearColor(0.0, 0.0, 0.0, 0.0);
-
-    // Call changeModel once to initialize
-    viewer.changeModel(0);
-
-    viewer.startDraw();
-};
-
-viewer.startDraw = function () {
-    if (!isDrawStart) {
-        isDrawStart = true;
-        (function tick() {
-            if (isPlay) {
-                viewer.draw(); // 1回分描画
-            }
-
-            var requestAnimationFrame =
-                window.requestAnimationFrame ||
-                window.mozRequestAnimationFrame ||
-                window.webkitRequestAnimationFrame ||
-                window.msRequestAnimationFrame;
-
-            // 一定時間後に自身を呼び出す
-            requestAnimationFrame(tick, canvas);
-        })();
-    }
-};
-
-viewer.draw = function () {
-    // l2dLog("--> draw()");
-    // viewer.resize();
-
-    MatrixStack.reset();
-    MatrixStack.loadIdentity();
-
-    if (frameCount % 30 == 0) {
-        lookRandom();
-    }
-
-    dragMgr.update(); // ドラッグ用パラメータの更新
-
-    // Note: face direction, top-left (-1,1), top-right (1,1), bottom-left (-1,-1), bottom-right (1,-1)
-    // dragMgr.setPoint(1, 1); // その方向を向く
-
-    live2DMgr.setDrag(dragMgr.getX(), dragMgr.getY());
-
-    // Canvasをクリアする
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
-    MatrixStack.multMatrix(projMatrix.getArray());
-    MatrixStack.multMatrix(viewMatrix.getArray());
-    MatrixStack.push();
-
-    for (var i = 0; i < live2DMgr.numModels(); i++) {
-        var model = live2DMgr.getModel(i);
-
-        if (model == null) return;
-
-        if (model.initialized && !model.updating) {
-            model.update(frameCount);
-            model.draw(gl);
-
-            if (!isModelShown && i == live2DMgr.numModels() - 1) {
-                isModelShown = !isModelShown;
-                var btnPrev = document.getElementById("btnPrev");
-                btnPrev.removeAttribute("disabled");
-                btnPrev.setAttribute("class", "active");
-
-                var btnNext = document.getElementById("btnNext");
-                btnNext.removeAttribute("disabled");
-                btnNext.setAttribute("class", "active");
-            }
-        }
-    }
-
-    MatrixStack.pop();
-
-    if (isPlay) {
-        frameCount++;
-    }
-};
-
-viewer.changeModel = function (inc = 1) {
-    isModelShown = false;
-
-    live2DMgr.reloadFlg = true;
-    live2DMgr.count += inc;
-
-    txtInfo = document.getElementById("txtInfo");
-
-    var count = live2DMgr.getCount();
-    var curModelPath = live2DMgr.modelJsonList[count];
-    txtInfo.textContent =
-        "[" +
-        (count + 1) +
-        "/" +
-        live2DMgr.modelJsonList.length +
-        "] " +
-        curModelPath;
-    console.log("[curModelPath]", curModelPath);
-    // console.log("[MD5]", curModelPath);
-    live2DMgr.changeModel(gl, viewer.resize);
-};
 
 viewer.flagBlacklist = function () {
     var count = live2DMgr.getCount();
@@ -654,6 +247,7 @@ viewer.flagBlacklist = function () {
     fs.appendFileSync(blacklistPath, relativeCurModelPath + "\n");
     console.log("[flagBlacklist]", "Flagged " + relativeCurModelPath);
 };
+
 
 function prettyPrintEveryJson() {
     walkdir(datasetRoot, (file) => {
@@ -668,12 +262,14 @@ function prettyPrintEveryJson() {
     });
 }
 
+
 function md5file(filePath) {
     const target = fs.readFileSync(filePath);
     const md5hash = crypto.createHash("md5");
     md5hash.update(target);
     return md5hash.digest("hex");
 }
+
 
 function loadModel(filelist) {
     let modelJsonList = [];
@@ -696,6 +292,7 @@ function loadModel(filelist) {
     console.log("[loadModel]", modelJsonList.length + " model loaded");
     return modelJsonList;
 }
+
 
 function loadModelJson(mocPath) {
     pardir = path.dirname(mocPath);
@@ -775,6 +372,7 @@ function loadModelJson(mocPath) {
     return modelJson;
 }
 
+
 function walkdir(dir, callback) {
     const files = fs.readdirSync(dir);
     files.forEach((file) => {
@@ -788,220 +386,9 @@ function walkdir(dir, callback) {
     });
 }
 
-/* ********** マウスイベント ********** */
 
 /*
- * マウスホイールによる拡大縮小
- */
-function modelScaling(scale) {
-    var isMaxScale = thisRef.viewMatrix.isMaxScale();
-    var isMinScale = thisRef.viewMatrix.isMinScale();
-
-    thisRef.viewMatrix.adjustScale(0, 0, scale);
-
-    // 画面が最大になったときのイベント
-    if (!isMaxScale) {
-        if (thisRef.viewMatrix.isMaxScale()) {
-            thisRef.live2DMgr.maxScaleEvent();
-        }
-    }
-    // 画面が最小になったときのイベント
-    if (!isMinScale) {
-        if (thisRef.viewMatrix.isMinScale()) {
-            thisRef.live2DMgr.minScaleEvent();
-        }
-    }
-}
-
-/*
- * クリックされた方向を向く
- * タップされた場所に応じてモーションを再生
- */
-function modelTurnHead(event) {
-    thisRef.drag = true;
-
-    var rect = event.target.getBoundingClientRect();
-
-    var sx = transformScreenX(event.clientX - rect.left);
-    var sy = transformScreenY(event.clientY - rect.top);
-    var vx = transformViewX(event.clientX - rect.left);
-    var vy = transformViewY(event.clientY - rect.top);
-
-    if (LAppDefine.DEBUG_MOUSE_LOG)
-        l2dLog(
-            "onMouseDown device( x:" +
-                event.clientX +
-                " y:" +
-                event.clientY +
-                " ) view( x:" +
-                vx +
-                " y:" +
-                vy +
-                ")"
-        );
-
-    thisRef.lastMouseX = sx;
-    thisRef.lastMouseY = sy;
-
-    thisRef.dragMgr.setPoint(vx, vy); // その方向を向く
-
-    // タップした場所に応じてモーションを再生
-    thisRef.live2DMgr.tapEvent(vx, vy);
-}
-
-/*
- * マウスを動かした時のイベント
- */
-function followPointer(event) {
-    var rect = event.target.getBoundingClientRect();
-
-    var sx = transformScreenX(event.clientX - rect.left);
-    var sy = transformScreenY(event.clientY - rect.top);
-    var vx = transformViewX(event.clientX - rect.left);
-    var vy = transformViewY(event.clientY - rect.top);
-
-    if (LAppDefine.DEBUG_MOUSE_LOG)
-        l2dLog(
-            "onMouseMove device( x:" +
-                event.clientX +
-                " y:" +
-                event.clientY +
-                " ) view( x:" +
-                vx +
-                " y:" +
-                vy +
-                ")"
-        );
-
-    if (thisRef.drag) {
-        thisRef.lastMouseX = sx;
-        thisRef.lastMouseY = sy;
-
-        thisRef.dragMgr.setPoint(vx, vy); // その方向を向く
-    }
-}
-
-/*
- * 正面を向く
- */
-function lookFront() {
-    if (thisRef.drag) {
-        thisRef.drag = false;
-    }
-
-    thisRef.dragMgr.setPoint(0, 0);
-}
-
-function lookRandom() {
-    if (thisRef.isLookRandom) {
-        sx = Math.random() * 2.0 - 1.0;
-        sy = Math.random() * 2.0 - 1.0;
-        thisRef.dragMgr.setPoint(sx, sy);
-        console.log("[lookRandom]", sx, sy);
-    }
-}
-
-function mouseEvent(e) {
-    e.preventDefault();
-
-    if (e.type == "mousewheel") {
-        if (
-            e.clientX < 0 ||
-            thisRef.canvas.clientWidth < e.clientX ||
-            e.clientY < 0 ||
-            thisRef.canvas.clientHeight < e.clientY
-        ) {
-            return;
-        }
-
-        if (e.wheelDelta > 0) modelScaling(1.1);
-        // 上方向スクロール 拡大
-        else modelScaling(0.9); // 下方向スクロール 縮小
-    } else if (e.type == "mousedown") {
-        // 右クリック以外なら処理を抜ける
-        if ("button" in e && e.button != 0) return;
-
-        modelTurnHead(e);
-    } else if (e.type == "mousemove") {
-        followPointer(e);
-    } else if (e.type == "mouseup") {
-        // 右クリック以外なら処理を抜ける
-        if ("button" in e && e.button != 0) return;
-
-        lookFront();
-    } else if (e.type == "mouseout") {
-        lookFront();
-    }
-}
-
-function touchEvent(e) {
-    e.preventDefault();
-
-    var touch = e.touches[0];
-
-    if (e.type == "touchstart") {
-        if (e.touches.length == 1) modelTurnHead(touch);
-        // onClick(touch);
-    } else if (e.type == "touchmove") {
-        followPointer(touch);
-
-        if (e.touches.length == 2) {
-            var touch1 = e.touches[0];
-            var touch2 = e.touches[1];
-
-            var len =
-                Math.pow(touch1.pageX - touch2.pageX, 2) +
-                Math.pow(touch1.pageY - touch2.pageY, 2);
-            if (thisRef.oldLen - len < 0) modelScaling(1.025);
-            // 上方向スクロール 拡大
-            else modelScaling(0.975); // 下方向スクロール 縮小
-
-            thisRef.oldLen = len;
-        }
-    } else if (e.type == "touchend") {
-        lookFront();
-    }
-}
-
-/* ********** マトリックス操作 ********** */
-function transformViewX(deviceX) {
-    var screenX = this.deviceToScreen.transformX(deviceX); // 論理座標変換した座標を取得。
-    return viewMatrix.invertTransformX(screenX); // 拡大、縮小、移動後の値。
-}
-
-function transformViewY(deviceY) {
-    var screenY = this.deviceToScreen.transformY(deviceY); // 論理座標変換した座標を取得。
-    return viewMatrix.invertTransformY(screenY); // 拡大、縮小、移動後の値。
-}
-
-function transformScreenX(deviceX) {
-    return this.deviceToScreen.transformX(deviceX);
-}
-
-function transformScreenY(deviceY) {
-    return this.deviceToScreen.transformY(deviceY);
-}
-
-/*
- * WebGLのコンテキストを取得する
- */
-function getWebGLContext() {
-    var NAMES = ["webgl", "experimental-webgl", "webkit-3d", "moz-webgl"];
-
-    for (var i = 0; i < NAMES.length; i++) {
-        try {
-            var ctx = this.canvas.getContext(NAMES[i], {
-                premultipliedAlpha: true,
-                preserveDrawingBuffer: true,
-            });
-            if (ctx) return ctx;
-        } catch (e) {}
-    }
-    return null;
-}
-
-/*
- * 画面エラーを出力
+ * Output screen error
  */
 function l2dError(msg) {
     if (!LAppDefine.DEBUG_LOG) return;
