@@ -97,9 +97,77 @@ function viewer() {
     // モデル描画用canvasの初期化
     viewer.initL2dCanvas("glcanvas");
 
+    this.canvasParent = document.getElementById("canvasParent");
+
+    // Setup pixi app for rendering Live2D v3
+    this.pixiApp = new PIXI.Application(
+        this.canvasParent.clientWidth, this.canvasParent.clientHeight, { 
+            transparent: true
+        }
+    );
+    // Append this.app.view to the canvas
+    this.canvasParent.appendChild(this.pixiApp.view);
+    this.pixiApp.view.style.position = "absolute";
+    this.pixiApp.view.style.width = "100%";
+    this.pixiApp.view.style.height = "100%";
+
+    // Setup pixi update loop
+    this.pixiApp.ticker.add((deltaTime) => {
+        if (!this.model) {
+            return;
+        }
+        this.model.update(deltaTime);
+        this.model.masks.update(this.pixiApp.renderer); 
+    });
+    this.pixiL2D = new L2D("dataset/碧蓝航线 Azue Lane/Azue Lane(JP)");
+    this.pixiL2D.load("aisaikesi_4", viewer.changeCanvas);
+
+    window.onresize = (event) => {
+        if (event === void 0) { event = null; }
+        let width = window.innerWidth * 0.9;
+        let height = (width / 16.0) * 9.0;
+        this.pixiApp.view.style.width = width + "px";
+        this.pixiApp.view.style.height = height + "px";
+        this.pixiApp.renderer.resize(width, height);
+
+        if (this.model) {
+            this.model.position = new PIXI.Point((width * 0.5), (height * 0.5));
+            this.model.scale = new PIXI.Point((this.model.position.x * 0.06), (this.model.position.x * 0.06));
+            this.model.masks.resize(this.pixiApp.view.width, this.pixiApp.view.height);
+        }
+    };
+
     // モデル用マトリクスの初期化と描画の開始
     viewer.init();
 }
+
+viewer.changeCanvas = function (model) {
+    this.pixiApp.stage.removeChildren();
+
+    // this.selectAnimation.empty();
+    // model.motions.forEach((value, key) => {
+    //     if (key != "effect") {
+    //         let btn = document.createElement("button");
+    //         let label = document.createTextNode(key);
+    //         btn.appendChild(label);
+    //         btn.className = "btnGenericText";
+    //         btn.addEventListener("click", () => {
+    //             this.startAnimation(key, "base");
+    //         });
+    //         this.selectAnimation.append(btn);
+    //     }
+    // });
+
+    this.model = model;
+    // this.model.update = this.onUpdate; // HACK: use hacked update fn for drag support
+    // console.log(this.model);
+    this.model.animator.addLayer("base", LIVE2DCUBISMFRAMEWORK.BuiltinAnimationBlenders.OVERRIDE, 1);
+
+    this.pixiApp.stage.addChild(this.model);
+    this.pixiApp.stage.addChild(this.model.masks);
+
+    window.onresize();
+};
 
 viewer.goto = function () {
     var folderPath = document.getElementById("loadModelDir").value;
@@ -378,7 +446,7 @@ viewer.init = function () {
         live2DMgr.nextIdleMotion();
     });
 
-    // 3Dバッファの初期化
+    // Initialize 3D buffer
     var width = canvas.width;
     var height = canvas.height;
 

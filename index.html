@@ -9,8 +9,8 @@
 </head>
 
 <body onload="viewer()">
-  <div style="max-height: 900px;max-width:900px;overflow: scroll;">
-    <canvas id="glcanvas" width="1024px" height="1024px" style="border:dashed 1px #CCC"></canvas>
+  <div id="canvasParent" style="border:dashed 1px #CCC; height: 900px; width: 900px; position: relative;">
+    <canvas id="glcanvas" style="position: absolute; width: 100%; height: 100%;" class=""></canvas>
   </div>
 
   <!-- Live2D Library -->
@@ -28,11 +28,22 @@
   <script src="src/LAppLive2DManager.js"></script>
   <script src="src/renderPlus.js"></script>
   <div id="txtInfo" style="color: #ffffff; background-color: transparent"></div>
+  
+  <!-- Live2D Cubism V3 Stuff -->
+  <script src="src/live2dv3/pixi.min.js"></script>
+  <script src="src/live2dv3/live2dcubismcore.min.js"></script>
+  <script src="src/live2dv3/live2dcubismframework.js"></script>
+  <script src="src/live2dv3/live2dcubismpixi.js"></script>
+  <script src="src/live2dv3/l2d.js"></script>
+
+  <p>
+    <input type="text" id="loadModelDir" value="" style="width: 300px">
+    <button id="btnGoto">Load Model Directory</button>
+  </p>
+  
   <p>
     <button id="btnPrev" class="active">Prev Model</button>
-    <button id="btnNext" class="active">Next Model</button>
-    <input type="number" id="editGoto" min="1" value="1">
-    <button id="btnGoto">Goto Model</button>
+    <button id="btnNext" class="active">Next Model</button>  
     <button id="btnPlayPause">Play</button>
     <button id="btnSave">Save As Image</button>
     <button id="btnSaveLayer">Save As Layers</button>
